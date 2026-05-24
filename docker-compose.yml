@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: splitly-db
+    environment:
+      POSTGRES_DB: splitlydb
+      POSTGRES_USER: splitly
+      POSTGRES_PASSWORD: splitly_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitly -d splitlydb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Backend
+  backend:
+    build: ./backend
+    container_name: splitly-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILE: prod
+      DATABASE_URL: jdbc:postgresql://postgres:5432/splitlydb
+      DB_USERNAME: splitly
+      DB_PASSWORD: splitly_password
+      JWT_SECRET: splitly_docker_jwt_secret_key_32chars_min
+      CORS_ORIGINS: http://localhost:3000,http://frontend:80
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  # React Frontend
+  frontend:
+    build: ./frontend
+    container_name: splitly-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8080
+
+volumes:
+  postgres_data:

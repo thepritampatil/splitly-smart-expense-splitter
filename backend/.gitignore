@@ -1,0 +1,6 @@
+target/
+.mvn/
+*.class
+*.jar
+.env
+.DS_Store
