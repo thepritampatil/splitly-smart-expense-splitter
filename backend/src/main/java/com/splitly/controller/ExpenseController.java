@@ -43,4 +43,9 @@ public class ExpenseController {
     public ResponseEntity<List<BalanceDto>> getGroupBalances(@PathVariable Long groupId) {
         return ResponseEntity.ok(expenseService.getGroupBalances(groupId));
     }
+
+    @PostMapping("/preview")
+    public ResponseEntity<SplitPreviewResponse> previewSplit(@Valid @RequestBody CreateExpenseRequest req) {
+        return ResponseEntity.ok(expenseService.previewSplit(req));
+    }
 }

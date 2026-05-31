@@ -13,4 +13,5 @@ public class ExpenseParticipantDto {
     public String fullName;
     public String email;
     public BigDecimal shareAmount;
+    public BigDecimal sharePercentage;
 }

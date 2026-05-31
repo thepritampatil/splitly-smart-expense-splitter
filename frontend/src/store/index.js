@@ -1,10 +1,23 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   authAPI, groupAPI, expenseAPI, settlementAPI,
   analyticsAPI, activityAPI, messageAPI, userAPI
 } from '../services/api';
+
+import { useGamificationStore } from './gamificationStore';
+export { useGamificationStore };
 import toast from 'react-hot-toast';
+
+function authErrorMessage(err, fallback) {
+  if (!err.response) {
+    return 'Cannot reach server. Is the backend running on port 8080?';
+  }
+  const data = err.response.data;
+  if (data?.message) return data.message;
+  if (data?.errors) return Object.values(data.errors).join(', ');
+  return fallback;
+}
 
 // =============================================
 // AUTH STORE
@@ -27,7 +40,7 @@ export const useAuthStore = create(
           toast.success(`Welcome to Splitly, ${user.fullName}! 🎉`);
           return true;
         } catch (err) {
-          const msg = err.response?.data?.message || 'Signup failed';
+          const msg = authErrorMessage(err, 'Signup failed');
           toast.error(msg);
           set({ loading: false });
           return false;
@@ -44,7 +57,7 @@ export const useAuthStore = create(
           toast.success(`Welcome back, ${user.fullName}!`);
           return true;
         } catch (err) {
-          const msg = err.response?.data?.message || 'Invalid email or password';
+          const msg = authErrorMessage(err, 'Invalid email or password');
           toast.error(msg);
           set({ loading: false });
           return false;
@@ -78,7 +91,24 @@ export const useAuthStore = create(
     }),
     {
       name: 'splitly_auth',
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          try {
+            const raw = localStorage.getItem(name);
+            return raw;
+          } catch {
+            return null;
+          }
+        },
+        setItem: (name, value) => localStorage.setItem(name, value),
+        removeItem: (name) => localStorage.removeItem(name),
+      })),
       partialize: (state) => ({ user: state.user, token: state.token, isAuthenticated: state.isAuthenticated }),
+      onRehydrateStorage: () => (_state, err) => {
+        if (err) {
+          localStorage.removeItem('splitly_auth');
+        }
+      },
     }
   )
 );
@@ -218,6 +248,7 @@ export const useExpenseStore = create((set, get) => ({
       set(state => ({ expenses: [res.data, ...state.expenses] }));
       toast.success(`Expense "${res.data.description}" added!`);
       await get().fetchBalances(data.groupId);
+      useGamificationStore.getState().refreshAfterAction();
       return res.data;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add expense');
@@ -260,16 +291,23 @@ export const useExpenseStore = create((set, get) => ({
 export const useSettlementStore = create((set) => ({
   settlements: [],
   optimizedDebts: [],
+  optimizationSummary: null,
   loading: false,
 
   fetchSettlements: async (groupId) => {
     set({ loading: true });
     try {
-      const [sRes, dRes] = await Promise.all([
+      const [sRes, summaryRes] = await Promise.all([
         settlementAPI.getByGroup(groupId),
-        settlementAPI.getOptimized(groupId),
+        settlementAPI.getOptimizationSummary(groupId),
       ]);
-      set({ settlements: sRes.data, optimizedDebts: dRes.data, loading: false });
+      const summary = summaryRes.data;
+      set({
+        settlements: sRes.data,
+        optimizedDebts: summary.transactions || [],
+        optimizationSummary: summary,
+        loading: false,
+      });
     } catch {
       set({ loading: false });
     }
@@ -294,9 +332,13 @@ export const useSettlementStore = create((set) => ({
         settlements: state.settlements.map(s => s.id === settlementId ? res.data : s),
       }));
       toast.success('Payment confirmed! ✅');
-      // Refresh optimized debts
-      const dRes = await settlementAPI.getOptimized(groupId);
-      set({ optimizedDebts: dRes.data });
+      useGamificationStore.getState().refreshAfterAction();
+      const summaryRes = await settlementAPI.getOptimizationSummary(groupId);
+      const summary = summaryRes.data;
+      set({
+        optimizedDebts: summary.transactions || [],
+        optimizationSummary: summary,
+      });
       return res.data;
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to confirm payment');

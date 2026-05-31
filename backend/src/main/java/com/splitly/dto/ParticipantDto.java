@@ -10,4 +10,5 @@ import java.math.BigDecimal;
 public class ParticipantDto {
     public Long userId;
     public BigDecimal shareAmount;
+    public BigDecimal sharePercentage;
 }

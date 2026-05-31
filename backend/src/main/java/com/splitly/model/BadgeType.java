@@ -1,0 +1,12 @@
+package com.splitly.model;
+
+public enum BadgeType {
+    FAST_SETTLER,
+    TRUSTED_PAYER,
+    CONSISTENT_CONTRIBUTOR,
+    FOOD_SPONSOR,
+    TRIP_CAPTAIN,
+    GROUP_LEADER,
+    EXPENSE_MASTER,
+    RELIABLE_ROOMMATE
+}

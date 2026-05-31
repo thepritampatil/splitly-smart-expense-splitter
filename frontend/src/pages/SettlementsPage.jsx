@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingDown, TrendingUp, Filter } from 'lucide-react';
-import { format } from 'date-fns';
-import { useGroupStore, useSettlementStore, useAuthStore } from '../store';
-import { EmptyState, SkeletonList, SettlementBadge, Avatar, StatCard } from '../components/ui';
-
-const stagger = { animate: { transition: { staggerChildren: 0.06 } } };
-const item    = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
+import { useGroupStore, useSettlementStore, useAuthStore, useGamificationStore } from '../store';
+import { StreakBanner, TrustScoreCard } from '../components/gamification';
+import { EmptyState, SkeletonList, StatCard } from '../components/ui';
+import { SettlementCard, OptimizationSummaryBanner, OptimizedSettlementCard } from '../components/domain';
+import { PageContainer } from '../components/shell';
+import PageTitle from '../components/ui/PageTitle';
+import { StaggerGrid } from '../components/motion';
+import { fadeUpItem } from '../lib/motion';
 
 export default function SettlementsPage() {
   const { groups, fetchGroups } = useGroupStore();
-  const { settlements, optimizedDebts, fetchSettlements, confirmPayment, declinePayment } = useSettlementStore();
+  const {
+    settlements, optimizedDebts, optimizationSummary,
+    fetchSettlements, confirmPayment, declinePayment, initiatePayment,
+  } = useSettlementStore();
   const { user } = useAuthStore();
+  const { summary, fetchMySummary } = useGamificationStore();
   const [selectedGroup, setSelectedGroup] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchGroups().then(() => {});
+    fetchMySummary();
   }, []);
 
   useEffect(() => {
@@ -48,12 +55,13 @@ export default function SettlementsPage() {
   };
 
   return (
-    <div className="p-5 sm:p-7 max-w-4xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Settlements</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Track and confirm payments</p>
-        </div>
+    <PageContainer maxWidth="4xl">
+      <PageTitle title="Settlements" subtitle="Track and confirm payments with your group" emoji="💸" />
+
+      <StreakBanner streakCount={summary?.stats?.streakCount} longestStreak={summary?.stats?.longestStreak} />
+
+      <div className="mb-4 max-w-sm">
+        <TrustScoreCard stats={summary?.stats} />
       </div>
 
       {/* Alert banners */}
@@ -68,19 +76,23 @@ export default function SettlementsPage() {
 
       {/* Stats */}
       {optimizedDebts.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard label="You Owe (Total)"
-            value={`₹${myDebts.reduce((s, d) => s + Number(d.amount), 0).toFixed(0)}`}
-            icon={TrendingDown} color="red" />
-          <StatCard label="Pending Confirm"
-            value={pendingConfirm.length}
-            icon={Wallet} color="yellow"
-            sub="Awaiting your action" />
-          <StatCard label="Optimized Txns"
-            value={optimizedDebts.length}
-            icon={TrendingUp} color="green"
-            sub="Min. to settle all" />
-        </div>
+        <StaggerGrid className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <motion.div variants={fadeUpItem}>
+            <StatCard
+              label="You Owe (Total)"
+              count={myDebts.reduce((s, d) => s + Number(d.amount), 0)}
+              formatCount={(n) => `₹${Math.round(n).toLocaleString('en-IN')}`}
+              icon={TrendingDown}
+              color="red"
+            />
+          </motion.div>
+          <motion.div variants={fadeUpItem}>
+            <StatCard label="Pending Confirm" count={pendingConfirm.length} icon={Wallet} color="yellow" sub="Awaiting your action" />
+          </motion.div>
+          <motion.div variants={fadeUpItem}>
+            <StatCard label="Optimized Txns" count={optimizedDebts.length} icon={TrendingUp} color="green" sub="Min. to settle all" />
+          </motion.div>
+        </StaggerGrid>
       )}
 
       {/* Group + Status Filters */}
@@ -105,25 +117,28 @@ export default function SettlementsPage() {
         </div>
       </div>
 
-      {/* Optimized Debts suggestion */}
-      {optimizedDebts.length > 0 && myDebts.length > 0 && (
-        <div className="glass-card p-4 mb-5">
-          <h3 className="text-sm font-semibold text-white mb-3">
-            💡 Your Optimized Payments
-          </h3>
+      {optimizationSummary && (
+        <OptimizationSummaryBanner summary={optimizationSummary} />
+      )}
+
+      {myDebts.length > 0 && (
+        <div className="glass-card mb-5 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-white">Your optimized payments</h3>
           <div className="space-y-2">
             {myDebts.map((d, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-dark-700/60 rounded-lg border border-rose-500/15">
-                <div>
-                  <p className="text-sm text-white">
-                    Pay <span className="font-medium text-rose-400">{d.toUserName}</span>
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">{groups.find(g => g.id === parseInt(selectedGroup))?.groupName}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-white">₹{Number(d.amount).toFixed(2)}</span>
-                </div>
-              </div>
+              <OptimizedSettlementCard
+                key={`${d.fromUserId}-${d.toUserId}-${i}`}
+                debt={d}
+                currentUserId={user?.id}
+                onPay={async (debt) => {
+                  await initiatePayment({
+                    receiverId: debt.toUserId,
+                    amount: debt.amount,
+                    groupId: parseInt(selectedGroup, 10),
+                  });
+                  fetchSettlements(parseInt(selectedGroup, 10));
+                }}
+              />
             ))}
           </div>
         </div>
@@ -138,61 +153,20 @@ export default function SettlementsPage() {
         <EmptyState icon={Wallet} title="No settlements found"
           description={statusFilter !== 'ALL' ? `No ${statusFilter.toLowerCase()} settlements` : 'No settlements in this group yet'} />
       ) : (
-        <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-3">
-          {filtered.map(s => {
-            const isPayer    = s.payer?.id === user?.id;
-            const isReceiver = s.receiver?.id === user?.id;
-            return (
-              <motion.div key={s.id} variants={item}
-                className="glass-card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={s.payer?.fullName} size="md" />
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {isPayer ? 'You' : s.payer?.fullName}
-                        <span className="text-slate-500 mx-1.5">→</span>
-                        {isReceiver ? 'You' : s.receiver?.fullName}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {s.groupName} · {s.createdAt && format(new Date(s.createdAt), 'MMM d, h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-white text-base">₹{Number(s.amount).toFixed(2)}</p>
-                    <SettlementBadge status={s.status} />
-                  </div>
-                </div>
-
-                {/* Actions */}
-                {s.status === 'PROCESSING' && isReceiver && (
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={() => handleConfirm(s.id)}
-                      className="btn-primary text-xs py-2 flex-1 justify-center">
-                      ✓ Confirm Payment Received
-                    </button>
-                    <button onClick={() => handleDecline(s.id)}
-                      className="btn-danger text-xs py-2 px-4">
-                      ✗
-                    </button>
-                  </div>
-                )}
-                {s.status === 'PROCESSING' && isPayer && (
-                  <p className="text-xs text-amber-400 mt-2 text-center bg-amber-500/8 rounded-lg py-2">
-                    ⏳ Waiting for {s.receiver?.fullName} to confirm receipt
-                  </p>
-                )}
-                {s.status === 'COMPLETED' && s.settledAt && (
-                  <p className="text-xs text-emerald-400 mt-2 text-center">
-                    ✅ Settled on {format(new Date(s.settledAt), 'MMM d, yyyy')}
-                  </p>
-                )}
-              </motion.div>
-            );
-          })}
-        </motion.div>
+        <StaggerGrid className="space-y-3">
+          {filtered.map(s => (
+            <motion.div key={s.id} variants={fadeUpItem} layout>
+              <SettlementCard
+                settlement={s}
+                currentUserId={user?.id}
+                onConfirm={handleConfirm}
+                onDecline={handleDecline}
+                showGroupName
+              />
+            </motion.div>
+          ))}
+        </StaggerGrid>
       )}
-    </div>
+    </PageContainer>
   );
 }

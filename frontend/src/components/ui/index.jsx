@@ -1,35 +1,76 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertCircle, Inbox } from 'lucide-react';
+import { useIsMobile } from '../../hooks/useMediaQuery';
+import { slideUpSheet, slideCenterModal, springModal } from '../../lib/motion';
+import AnimatedNumber from '../motion/AnimatedNumber';
 
 // =============================================
 // MODAL WRAPPER
 // =============================================
 export function Modal({ isOpen = true, onClose, title, children, size = 'md' }) {
   const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl' };
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen, onClose]);
+
+  const panelMotion = isMobile ? slideUpSheet : slideCenterModal;
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+        <motion.div
+          className="modal-overlay"
+          role="presentation"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.target === e.currentTarget && onClose?.()}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 16 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className={`modal-content w-full ${sizes[size]}`}
-            onClick={e => e.stopPropagation()}>
+            variants={panelMotion}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={springModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? 'modal-title' : undefined}
+            className={`modal-content w-full ${sizes[size]} ${isMobile ? 'modal-content-sheet' : ''}`}
+            onClick={e => e.stopPropagation()}
+          >
             {title && (
-              <div className="flex items-center justify-between p-5 border-b border-white/5">
-                <h2 className="font-semibold text-white text-base">{title}</h2>
-                {onClose && (
-                  <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
-                    <X size={18} />
-                  </button>
-                )}
+              <div className="modal-header border-b border-white/5 p-5">
+                {isMobile && <div className="modal-drag-handle mx-auto mb-3" aria-hidden />}
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id="modal-title" className="font-semibold text-white text-base">{title}</h2>
+                  {onClose && (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Close dialog"
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/5 hover:text-white touch-manipulation"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
-            <div className="p-5">{children}</div>
+            <div className="modal-body p-5">{children}</div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -40,7 +81,7 @@ export function Modal({ isOpen = true, onClose, title, children, size = 'md' }) 
 // =============================================
 export function SkeletonCard({ lines = 3 }) {
   return (
-    <div className="glass-card p-5 space-y-3">
+    <div className="glass-card space-y-3 p-5">
       <div className="skeleton h-4 w-2/3 rounded" />
       {Array.from({ length: lines - 1 }).map((_, i) => (
         <div key={i} className={`skeleton h-3 rounded ${i === lines - 2 ? 'w-1/3' : 'w-full'}`} />
@@ -128,15 +169,23 @@ export function Avatar({ src, name, size = 'md', className = '' }) {
 // =============================================
 // EMPTY STATE
 // =============================================
-export function EmptyState({ icon: Icon = Inbox, title, description, action }) {
+export function EmptyState({ icon: Icon = Inbox, title, description, action, emoji }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-16 h-16 bg-dark-700 rounded-2xl flex items-center justify-center mb-4 border border-white/5">
-        <Icon size={28} className="text-slate-500" />
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', damping: 24, stiffness: 280 }}
+      className="flex flex-col items-center justify-center px-4 py-16 text-center"
+    >
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.06] bg-gradient-to-br from-dark-600/80 to-dark-700/40 shadow-glow-sm backdrop-blur-md">
+        {emoji ? (
+          <span className="text-3xl" role="img" aria-hidden>{emoji}</span>
+        ) : (
+          <Icon size={28} className="text-slate-500" />
+        )}
       </div>
-      <h3 className="font-semibold text-white mb-1.5">{title}</h3>
-      <p className="text-sm text-slate-500 max-w-sm mb-4">{description}</p>
+      <h3 className="font-display mb-1.5 font-semibold text-white">{title}</h3>
+      <p className="mb-4 max-w-sm text-sm leading-relaxed text-slate-500">{description}</p>
       {action}
     </motion.div>
   );
@@ -145,22 +194,27 @@ export function EmptyState({ icon: Icon = Inbox, title, description, action }) {
 // =============================================
 // PAGE HEADER
 // =============================================
-export function PageHeader({ title, subtitle, action }) {
+export function PageHeader({ title, subtitle, action, emoji }) {
   return (
-    <div className="flex items-start justify-between mb-6">
-      <div>
-        <h1 className="text-xl font-bold text-white">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+    <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="font-display text-xl font-bold tracking-tight text-white sm:text-2xl">
+          {emoji && <span className="mr-1.5">{emoji}</span>}
+          {title}
+        </h1>
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>
   );
 }
 
+export { default as PageTitle } from './PageTitle';
+
 // =============================================
 // STAT CARD
 // =============================================
-export function StatCard({ label, value, sub, icon: Icon, color = 'brand', trend }) {
+export function StatCard({ label, value, count, formatCount, sub, icon: Icon, color = 'brand', trend }) {
   const colors = {
     brand:   { bg: 'bg-brand-500/10',   text: 'text-brand-400',   ring: 'ring-brand-500/20' },
     green:   { bg: 'bg-emerald-500/10', text: 'text-emerald-400', ring: 'ring-emerald-500/20' },
@@ -169,18 +223,33 @@ export function StatCard({ label, value, sub, icon: Icon, color = 'brand', trend
   };
   const c = colors[color] || colors.brand;
 
+  const valueNode = count != null ? (
+    <AnimatedNumber
+      value={count}
+      format={formatCount || ((n) => String(Math.round(n)))}
+    />
+  ) : value;
+
   return (
-    <div className="glass-card p-5">
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-sm text-slate-500">{label}</p>
+    <div className="stat-card">
+      <div className="relative z-10 mb-3 flex items-start justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
         {Icon && (
-          <div className={`w-9 h-9 ${c.bg} rounded-lg flex items-center justify-center ring-1 ${c.ring}`}>
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.15, type: 'spring', stiffness: 300, damping: 20 }}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${c.bg} ${c.ring}`}
+          >
             <Icon size={18} className={c.text} />
-          </div>
+          </motion.div>
         )}
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
+      <p className="relative z-10 font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">{valueNode}</p>
+      {sub && <p className="relative z-10 mt-1.5 text-xs text-slate-500">{sub}</p>}
+      {trend != null && (
+        <p className="relative z-10 mt-1 text-xs text-emerald-400">{trend}</p>
+      )}
     </div>
   );
 }

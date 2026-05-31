@@ -1,15 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { User, Mail, Lock, LogOut, Shield, Palette } from 'lucide-react';
-import { useAuthStore } from '../store';
+import { useAuthStore, useGamificationStore } from '../store';
+import { ProfileBadgeSection, UserStatsWidget } from '../components/gamification';
 import { Avatar, FormField } from '../components/ui';
+import { PageContainer } from '../components/shell';
+import PageTitle from '../components/ui/PageTitle';
 import { useNavigate } from 'react-router-dom';
 
 const AVATAR_STYLES = ['avataaars','bottts','identicon','personas','pixel-art','adventurer','lorelei'];
 
 export default function SettingsPage() {
   const { user, updateProfile, logout } = useAuthStore();
+  const { summary, badges, loading: gamificationLoading, fetchMySummary, fetchMyBadges } = useGamificationStore();
+
+  useEffect(() => {
+    fetchMySummary();
+    fetchMyBadges();
+  }, []);
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: { fullName: user?.fullName }
   });
@@ -35,11 +44,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-5 sm:p-7 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage your profile and preferences</p>
-      </div>
+    <PageContainer maxWidth="2xl">
+      <PageTitle title="Settings" subtitle="Your profile and preferences" emoji="✨" />
 
       <div className="space-y-5">
         {/* Profile Card */}
@@ -92,6 +98,10 @@ export default function SettingsPage() {
           </form>
         </motion.div>
 
+        <UserStatsWidget stats={summary?.stats} loading={gamificationLoading} />
+
+        <ProfileBadgeSection badges={badges.length ? badges : summary?.recentBadges} loading={gamificationLoading} />
+
         {/* Account Info */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="glass-card p-5">
@@ -130,6 +140,6 @@ export default function SettingsPage() {
           </button>
         </motion.div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

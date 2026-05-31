@@ -60,15 +60,34 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
-        config.setAllowedOrigins(origins);
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        // Support any localhost port in dev (Vite may use 5173, 5174, 5175, …)
+        boolean hasLocalhostPattern = origins.stream().anyMatch(o -> o.contains("localhost"));
+        if (hasLocalhostPattern) {
+            config.setAllowedOriginPatterns(
+                    java.util.stream.Stream.concat(
+                            origins.stream(),
+                            java.util.stream.Stream.of(
+                                    "http://localhost:*",
+                                    "http://127.0.0.1:*"
+                            )
+                    ).distinct().toList()
+            );
+        } else {
+            config.setAllowedOrigins(origins);
+        }
+
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 

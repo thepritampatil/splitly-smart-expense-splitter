@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { Bell, Check } from 'lucide-react';
 import { useGroupStore, useAuthStore } from '../store';
 import { EmptyState, GROUP_TYPE_CONFIG } from '../components/ui';
+import { PageContainer } from '../components/shell';
+import PageTitle from '../components/ui/PageTitle';
 import api from '../services/api';
 
 export default function InvitesPage() {
@@ -32,11 +34,8 @@ export default function InvitesPage() {
   };
 
   return (
-    <div className="p-5 sm:p-7 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-white">Invitations</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Pending group invitations for you</p>
-      </div>
+    <PageContainer maxWidth="2xl">
+      <PageTitle title="Invitations" subtitle="Pending group invites waiting for you" emoji="📬" />
 
       {loading ? (
         <div className="space-y-3">
@@ -80,6 +79,6 @@ export default function InvitesPage() {
           Accepting an invite automatically adds group members to your friend list for quick future invites.
         </p>
       </div>
-    </div>
+    </PageContainer>
   );
 }

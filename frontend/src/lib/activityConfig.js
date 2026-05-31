@@ -1,0 +1,110 @@
+import {
+  Receipt, Wallet, UserPlus, Users, Settings, Trash2, Sparkles,
+} from 'lucide-react';
+
+/** Unified activity type metadata for timeline feeds */
+export const ACTIVITY_TYPE_CONFIG = {
+  EXPENSE_ADDED: {
+    emoji: '🍕',
+    label: 'Expense added',
+    icon: Receipt,
+    color: 'text-brand-300',
+    bg: 'bg-brand-500/15',
+    ring: 'ring-brand-500/25',
+    dot: 'bg-brand-400',
+  },
+  EXPENSE_UPDATED: {
+    emoji: '✏️',
+    label: 'Expense updated',
+    icon: Receipt,
+    color: 'text-brand-300',
+    bg: 'bg-brand-500/15',
+    ring: 'ring-brand-500/25',
+    dot: 'bg-brand-400',
+  },
+  EXPENSE_DELETED: {
+    emoji: '🗑️',
+    label: 'Expense removed',
+    icon: Trash2,
+    color: 'text-rose-300',
+    bg: 'bg-rose-500/15',
+    ring: 'ring-rose-500/25',
+    dot: 'bg-rose-400',
+  },
+  SETTLEMENT_INITIATED: {
+    emoji: '💸',
+    label: 'Payment sent',
+    icon: Wallet,
+    color: 'text-amber-300',
+    bg: 'bg-amber-500/15',
+    ring: 'ring-amber-500/25',
+    dot: 'bg-amber-400',
+  },
+  SETTLEMENT_CONFIRMED: {
+    emoji: '✅',
+    label: 'Payment confirmed',
+    icon: Wallet,
+    color: 'text-emerald-300',
+    bg: 'bg-emerald-500/15',
+    ring: 'ring-emerald-500/25',
+    dot: 'bg-emerald-400',
+  },
+  USER_JOINED_GROUP: {
+    emoji: '🎉',
+    label: 'Member joined',
+    icon: UserPlus,
+    color: 'text-emerald-300',
+    bg: 'bg-emerald-500/15',
+    ring: 'ring-emerald-500/25',
+    dot: 'bg-emerald-400',
+  },
+  USER_LEFT_GROUP: {
+    emoji: '👋',
+    label: 'Member left',
+    icon: Users,
+    color: 'text-rose-300',
+    bg: 'bg-rose-500/15',
+    ring: 'ring-rose-500/25',
+    dot: 'bg-rose-400',
+  },
+  GROUP_CREATED: {
+    emoji: '✨',
+    label: 'Group created',
+    icon: Sparkles,
+    color: 'text-cyan-300',
+    bg: 'bg-cyan-500/15',
+    ring: 'ring-cyan-500/25',
+    dot: 'bg-cyan-400',
+  },
+  GROUP_UPDATED: {
+    emoji: '⚙️',
+    label: 'Group updated',
+    icon: Settings,
+    color: 'text-slate-300',
+    bg: 'bg-slate-500/15',
+    ring: 'ring-slate-500/25',
+    dot: 'bg-slate-400',
+  },
+  MEMBER_INVITED: {
+    emoji: '📬',
+    label: 'Invite sent',
+    icon: UserPlus,
+    color: 'text-purple-300',
+    bg: 'bg-purple-500/15',
+    ring: 'ring-purple-500/25',
+    dot: 'bg-purple-400',
+  },
+  MEMBER_REMOVED: {
+    emoji: '🚪',
+    label: 'Member removed',
+    icon: Users,
+    color: 'text-rose-300',
+    bg: 'bg-rose-500/15',
+    ring: 'ring-rose-500/25',
+    dot: 'bg-rose-400',
+  },
+};
+
+export function getActivityConfig(type) {
+  return ACTIVITY_TYPE_CONFIG[type] || ACTIVITY_TYPE_CONFIG.GROUP_CREATED;
+}

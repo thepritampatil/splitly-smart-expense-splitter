@@ -1,17 +1,20 @@
 package com.splitly.service;
 
+import com.splitly.balance.BalanceCalculationService;
+import com.splitly.gamification.GamificationEvents;
+import com.splitly.gamification.event.DomainEventPublisher;
 import com.splitly.dto.*;
 import com.splitly.exception.*;
 import com.splitly.model.*;
 import com.splitly.repository.*;
+import com.splitly.split.ComputedShare;
+import com.splitly.split.SplitCalculationService;
 import com.splitly.util.AuthUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,10 +30,13 @@ public class ExpenseService {
     private final UserRepository userRepository;
     private final ActivityService activityService;
     private final AuthUtil authUtil;
+    private final SplitCalculationService splitCalculationService;
+    private final BalanceCalculationService balanceCalculationService;
+    private final DomainEventPublisher domainEventPublisher;
 
     public List<ExpenseDto> getGroupExpenses(Long groupId) {
         User current = authUtil.getCurrentUser();
-        verifyMember(groupId, current.getId());
+        balanceCalculationService.verifyMember(groupId, current.getId());
         return expenseRepository.findByGroupId(groupId)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
@@ -41,19 +47,7 @@ public class ExpenseService {
         Group group = groupRepository.findById(req.groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group", req.groupId));
 
-        verifyMember(req.groupId, current.getId());
-
-        // Validate split amounts
-        if (req.splitType == SplitType.EXACT) {
-            BigDecimal total = req.participants.stream()
-                    .map(p -> p.shareAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (total.compareTo(req.amount) != 0) {
-                throw new BadRequestException(
-                    "Exact split amounts (" + total + ") must equal total expense (" + req.amount + ")"
-                );
-            }
-        }
+        balanceCalculationService.verifyMember(req.groupId, current.getId());
 
         Expense expense = Expense.builder()
                 .amount(req.amount)
@@ -66,7 +60,6 @@ public class ExpenseService {
 
         expense = expenseRepository.save(expense);
 
-        // Build participants
         List<ExpenseParticipant> participants = buildParticipants(expense, req);
         expense.setParticipants(participants);
         expenseRepository.save(expense);
@@ -77,6 +70,10 @@ public class ExpenseService {
         );
 
         log.info("Expense created: {} for group {}", expense.getId(), group.getId());
+
+        domainEventPublisher.publishGamificationEvent(
+                GamificationEvents.expenseCreated(current.getId(), group.getId(), expense.getId(), req.amount));
+
         return toDto(expense);
     }
 
@@ -88,15 +85,6 @@ public class ExpenseService {
 
         if (!expense.getPaidBy().getId().equals(current.getId())) {
             throw new UnauthorizedException("Only the payer can edit this expense");
-        }
-
-        if (req.splitType == SplitType.EXACT) {
-            BigDecimal total = req.participants.stream()
-                    .map(p -> p.shareAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (total.compareTo(req.amount) != 0) {
-                throw new BadRequestException("Exact split amounts must equal total expense");
-            }
         }
 
         expense.setAmount(req.amount);
@@ -124,7 +112,6 @@ public class ExpenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Expense", expenseId));
 
         if (!expense.getPaidBy().getId().equals(current.getId())) {
-            // Allow group admin too
             boolean isAdmin = memberRepository.findByGroupIdAndUserId(
                 expense.getGroup().getId(), current.getId()
             ).map(m -> m.getRole() == MemberRole.ADMIN).orElse(false);
@@ -137,81 +124,60 @@ public class ExpenseService {
             current.getFullName() + " deleted expense \"" + expense.getDescription() + "\"", current
         );
 
+        domainEventPublisher.publishGamificationEvent(
+                GamificationEvents.expenseDeleted(current.getId(), expense.getGroup().getId(), expense.getId()));
+
         expenseRepository.delete(expense);
     }
 
-    /**
-     * Calculate net balance for each member in a group.
-     * Balance = totalPaid - totalOwed
-     * Positive = should receive money
-     * Negative = owes money
-     */
     public List<BalanceDto> getGroupBalances(Long groupId) {
         User current = authUtil.getCurrentUser();
-        verifyMember(groupId, current.getId());
-
-        List<GroupMember> members = memberRepository.findByGroupIdAndStatus(groupId, MemberStatus.ACCEPTED);
-        List<Expense> expenses = expenseRepository.findByGroupId(groupId);
-
-        return members.stream().map(m -> {
-            User user = m.getUser();
-
-            // Total amount this user paid
-            BigDecimal totalPaid = expenses.stream()
-                    .filter(e -> e.getPaidBy().getId().equals(user.getId()))
-                    .map(Expense::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            // Total amount this user owes (their share in all expenses)
-            BigDecimal totalOwed = expenses.stream()
-                    .flatMap(e -> e.getParticipants().stream())
-                    .filter(p -> p.getUser().getId().equals(user.getId()))
-                    .map(ExpenseParticipant::getShareAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            BigDecimal netBalance = totalPaid.subtract(totalOwed);
-
-            return BalanceDto.builder()
-                    .userId(user.getId())
-                    .fullName(user.getFullName())
-                    .email(user.getEmail())
-                    .totalPaid(totalPaid)
-                    .totalOwed(totalOwed)
-                    .netBalance(netBalance)
-                    .build();
-        }).collect(Collectors.toList());
+        balanceCalculationService.verifyMember(groupId, current.getId());
+        return balanceCalculationService.calculateGroupBalances(groupId);
     }
 
-    // --- PRIVATE HELPERS ---
+    public SplitPreviewResponse previewSplit(CreateExpenseRequest req) {
+        User current = authUtil.getCurrentUser();
+        balanceCalculationService.verifyMember(req.groupId, current.getId());
+
+        List<ComputedShare> computed = splitCalculationService.calculate(
+                req.splitType, req.amount, req.participants);
+
+        var participantDtos = computed.stream()
+                .map(s -> ExpenseParticipantDto.builder()
+                        .userId(s.getUserId())
+                        .shareAmount(s.getShareAmount())
+                        .sharePercentage(s.getSharePercentage())
+                        .build())
+                .toList();
+
+        var allocated = computed.stream()
+                .map(ComputedShare::getShareAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        return SplitPreviewResponse.builder()
+                .valid(true)
+                .totalAmount(req.amount)
+                .allocatedAmount(allocated)
+                .remainingAmount(req.amount.subtract(allocated))
+                .participants(participantDtos)
+                .build();
+    }
 
     private List<ExpenseParticipant> buildParticipants(Expense expense, CreateExpenseRequest req) {
+        List<ComputedShare> shares = splitCalculationService.calculate(
+                req.splitType, req.amount, req.participants);
+
         List<ExpenseParticipant> participants = new ArrayList<>();
-        int count = req.participants.size();
-
-        for (int i = 0; i < count; i++) {
-            ParticipantDto p = req.participants.get(i);
-            User user = userRepository.findById(p.userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User", p.userId));
-
-            BigDecimal share;
-            if (req.splitType == SplitType.EQUAL) {
-                // Distribute evenly, last person gets remainder to avoid rounding issues
-                if (i < count - 1) {
-                    share = req.amount.divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN);
-                } else {
-                    BigDecimal alreadyAllocated = req.amount
-                            .divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN)
-                            .multiply(BigDecimal.valueOf(count - 1));
-                    share = req.amount.subtract(alreadyAllocated);
-                }
-            } else {
-                share = p.shareAmount;
-            }
+        for (ComputedShare share : shares) {
+            User user = userRepository.findById(share.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", share.getUserId()));
 
             participants.add(ExpenseParticipant.builder()
                     .expense(expense)
                     .user(user)
-                    .shareAmount(share)
+                    .shareAmount(share.getShareAmount())
+                    .sharePercentage(share.getSharePercentage())
                     .build());
         }
         return participants;
@@ -224,14 +190,9 @@ public class ExpenseService {
                         .fullName(p.getUser().getFullName())
                         .email(p.getUser().getEmail())
                         .shareAmount(p.getShareAmount())
+                        .sharePercentage(p.getSharePercentage())
                         .build())
                 .collect(Collectors.toList());
         return ExpenseDto.from(expense, participants);
-    }
-
-    private void verifyMember(Long groupId, Long userId) {
-        if (!memberRepository.existsByGroupIdAndUserIdAndStatus(groupId, userId, MemberStatus.ACCEPTED)) {
-            throw new UnauthorizedException("You are not a member of this group");
-        }
     }
 }

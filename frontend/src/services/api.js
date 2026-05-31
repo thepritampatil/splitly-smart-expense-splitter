@@ -1,10 +1,10 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
+// Empty VITE_API_URL → use Vite dev proxy (/api). Set in production (e.g. Railway URL).
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const api = axios.create({
-  baseURL: `${BASE_URL}/api`,
+  baseURL: API_BASE ? `${API_BASE}/api` : '/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
@@ -26,7 +26,10 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const message = error.response?.data?.message || error.message;
 
-    if (status === 401) {
+    const isAuthRoute = error.config?.url?.includes('/auth/login')
+      || error.config?.url?.includes('/auth/signup');
+
+    if (status === 401 && !isAuthRoute) {
       localStorage.removeItem('splitly_token');
       localStorage.removeItem('splitly_user');
       window.location.href = '/login';
@@ -86,6 +89,7 @@ export const expenseAPI = {
   update:     (id, data)   => api.put(`/expenses/${id}`, data),
   delete:     (id)         => api.delete(`/expenses/${id}`),
   getBalances:(groupId)    => api.get(`/expenses/group/${groupId}/balances`),
+  previewSplit:(data)      => api.post('/expenses/preview', data),
 };
 
 // =============================================
@@ -94,6 +98,7 @@ export const expenseAPI = {
 export const settlementAPI = {
   getByGroup:    (groupId) => api.get(`/settlements/group/${groupId}`),
   getOptimized:  (groupId) => api.get(`/settlements/group/${groupId}/optimized`),
+  getOptimizationSummary: (groupId) => api.get(`/settlements/group/${groupId}/optimized/summary`),
   initiatePayment:(data)   => api.post('/settlements/pay', data),
   confirmPayment: (data)   => api.post('/settlements/confirm', data),
   declinePayment: (id)     => api.post(`/settlements/${id}/decline`),
@@ -121,6 +126,19 @@ export const activityAPI = {
 export const messageAPI = {
   getByGroup: (groupId) => api.get(`/messages/group/${groupId}`),
   send:       (data)    => api.post('/messages', data),
+};
+
+// =============================================
+// GAMIFICATION
+// =============================================
+export const gamificationAPI = {
+  getMySummary:      () => api.get('/gamification/me/summary'),
+  getMyBadges:       () => api.get('/gamification/me/badges'),
+  getMyStats:        () => api.get('/gamification/me/stats'),
+  getGroupActivity:  (groupId) => api.get(`/gamification/group/${groupId}/activity`),
+  getGroupInsights:  (groupId) => api.get(`/gamification/group/${groupId}/insights`),
+  getLeaderboard:    (groupId, type = 'active') =>
+    api.get(`/gamification/group/${groupId}/leaderboard`, { params: { type } }),
 };
 
 export default api;

@@ -1,0 +1,12 @@
+package com.splitly.gamification.event;
+
+public enum GamificationEventType {
+    EXPENSE_CREATED,
+    EXPENSE_UPDATED,
+    EXPENSE_DELETED,
+    SETTLEMENT_INITIATED,
+    SETTLEMENT_COMPLETED,
+    SETTLEMENT_DECLINED,
+    GROUP_MEMBER_JOINED,
+    OPTIMIZATION_COMPLETED
+}

@@ -38,7 +38,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-brand-500 rounded-lg flex items-center justify-center font-bold text-sm">S</div>
-            <span className="font-bold text-lg">Splitly</span>
+            <span className="font-display text-lg font-bold">Splitly</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-400 hover:text-white transition-colors px-3 py-1.5">Login</Link>
@@ -62,7 +62,7 @@ export default function LandingPage() {
 
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="text-4xl sm:text-6xl font-bold leading-tight mb-5">
+            className="font-display text-4xl font-bold leading-tight sm:text-6xl mb-5">
             Split expenses,
             <br />
             <span className="text-gradient">not friendships</span>

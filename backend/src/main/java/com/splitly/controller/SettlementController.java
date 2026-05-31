@@ -27,6 +27,11 @@ public class SettlementController {
         return ResponseEntity.ok(settlementService.getOptimizedDebts(groupId));
     }
 
+    @GetMapping("/group/{groupId}/optimized/summary")
+    public ResponseEntity<OptimizationSummaryDto> getOptimizationSummary(@PathVariable Long groupId) {
+        return ResponseEntity.ok(settlementService.getOptimizationSummary(groupId));
+    }
+
     @PostMapping("/pay")
     public ResponseEntity<SettlementDto> initiatePayment(@Valid @RequestBody InitiatePaymentRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(settlementService.initiatePayment(req));

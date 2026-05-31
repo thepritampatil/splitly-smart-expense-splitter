@@ -4,6 +4,8 @@ import com.splitly.dto.*;
 import com.splitly.exception.*;
 import com.splitly.model.*;
 import com.splitly.repository.*;
+import com.splitly.gamification.GamificationEvents;
+import com.splitly.gamification.event.DomainEventPublisher;
 import com.splitly.util.AuthUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ public class GroupService {
     private final FriendRepository friendRepository;
     private final ActivityService activityService;
     private final AuthUtil authUtil;
+    private final DomainEventPublisher domainEventPublisher;
 
     public List<GroupDto> getMyGroups() {
         User current = authUtil.getCurrentUser();
@@ -136,6 +139,9 @@ public class GroupService {
 
         activityService.log(ActivityType.USER_JOINED_GROUP, group,
                 current.getFullName() + " joined the group", current);
+
+        domainEventPublisher.publishGamificationEvent(
+                GamificationEvents.groupMemberJoined(current.getId(), groupId));
     }
 
     @Transactional

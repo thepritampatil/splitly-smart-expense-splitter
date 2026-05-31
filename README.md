@@ -279,7 +279,7 @@ Tests cover:
 - JWT authentication with BCrypt
 - Group creation with types (Hostel/Trip/Flatmates/College/Office)
 - Admin/Member role system
-- Equal and Exact expense splitting
+- Equal, Exact, and Percentage expense splitting
 - Automatic balance calculation
 - Debt optimization algorithm (greedy)
 - Two-step settlement workflow (PROCESSING → COMPLETED)

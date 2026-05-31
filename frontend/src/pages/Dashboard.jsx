@@ -1,78 +1,71 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Users, Receipt, Wallet, TrendingUp, ArrowRight, Clock, IndianRupee } from 'lucide-react';
-import { useAuthStore, useGroupStore, useExpenseStore, useActivityStore } from '../store';
-import { StatCard, SkeletonCard, EmptyState, Avatar, CATEGORY_CONFIG } from '../components/ui';
-import { format } from 'date-fns';
-
-const stagger = { animate: { transition: { staggerChildren: 0.07 } } };
-const fadeUp  = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
-
-function ExpenseCard({ expense }) {
-  const cat = CATEGORY_CONFIG[expense.category] || CATEGORY_CONFIG.OTHER;
-  return (
-    <motion.div variants={fadeUp} className="flex items-center gap-3 p-3 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-colors">
-      <div className="w-9 h-9 bg-dark-600 rounded-lg flex items-center justify-center text-lg flex-shrink-0">
-        {cat.emoji}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate">{expense.description}</p>
-        <p className="text-xs text-slate-500">Paid by {expense.paidBy?.fullName} · {expense.groupName}</p>
-      </div>
-      <p className="text-sm font-semibold text-white flex-shrink-0">₹{Number(expense.amount).toFixed(2)}</p>
-    </motion.div>
-  );
-}
-
-function ActivityItem({ activity }) {
-  const typeColors = {
-    EXPENSE_ADDED: 'bg-brand-500/15 text-brand-400',
-    SETTLEMENT_CONFIRMED: 'bg-emerald-500/15 text-emerald-400',
-    SETTLEMENT_INITIATED: 'bg-amber-500/15 text-amber-400',
-    USER_JOINED_GROUP: 'bg-purple-500/15 text-purple-400',
-    GROUP_CREATED: 'bg-cyan-500/15 text-cyan-400',
-  };
-  const colorClass = typeColors[activity.type] || 'bg-slate-500/15 text-slate-400';
-  return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-white/4 last:border-0">
-      {activity.triggeredBy ? (
-        <Avatar src={activity.triggeredBy.avatar} name={activity.triggeredBy.fullName} size="sm" />
-      ) : (
-        <div className="w-8 h-8 bg-dark-600 rounded-full flex-shrink-0" />
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-300 leading-snug">{activity.message}</p>
-        <p className="text-xs text-slate-600 mt-0.5">
-          {activity.groupName && <span className="text-slate-500">{activity.groupName} · </span>}
-          {activity.timestamp && format(new Date(activity.timestamp), 'MMM d, h:mm a')}
-        </p>
-      </div>
-    </div>
-  );
-}
+import {
+  Users, Receipt, ArrowRight, PieChart as PieIcon, BarChart2,
+} from 'lucide-react';
+import {
+  useAuthStore, useGroupStore, useExpenseStore,
+  useActivityStore, useAnalyticsStore, useGamificationStore,
+} from '../store';
+import { TrustScoreCard, BadgeGrid, StreakBanner } from '../components/gamification';
+import { StatCard, SkeletonCard, EmptyState, CATEGORY_CONFIG } from '../components/ui';
+import {
+  ExpenseCard, ActivityTimeline, GroupQuickPick,
+  DashboardInsights, DashboardBalanceSummary,
+} from '../components/domain';
+import { PageContainer } from '../components/shell';
+import PageTitle from '../components/ui/PageTitle';
+import { StaggerGrid } from '../components/motion';
+import { fadeUpItem } from '../lib/motion';
+import { computeAnalyticsInsights } from '../lib/charts';
 
 export default function Dashboard() {
   const { user } = useAuthStore();
   const { groups, loading: groupsLoading, fetchGroups } = useGroupStore();
-  const { expenses, fetchExpenses }    = useExpenseStore();
+  const { expenses, balances, loading: expLoading, fetchExpenses, fetchBalances } = useExpenseStore();
   const { activities, loading: actLoading, fetchMyActivities } = useActivityStore();
+  const { monthly, category, loading: analyticsLoading, fetchAnalytics } = useAnalyticsStore();
+  const { summary, loading: gamificationLoading, fetchMySummary } = useGamificationStore();
+
+  const [selectedGroup, setSelectedGroup] = useState('');
 
   useEffect(() => {
     fetchGroups();
     fetchMyActivities();
+    fetchMySummary();
   }, []);
 
   useEffect(() => {
-    if (groups.length > 0 && groups[0]) {
-      fetchExpenses(groups[0].id);
+    if (groups.length > 0 && !selectedGroup) {
+      setSelectedGroup(String(groups[0].id));
     }
-  }, [groups.length]);
+  }, [groups.length, selectedGroup]);
+
+  const groupId = selectedGroup ? parseInt(selectedGroup, 10) : null;
+  const selectedGroupData = groups.find(g => g.id === groupId);
+
+  useEffect(() => {
+    if (!groupId) return;
+    fetchExpenses(groupId);
+    fetchBalances(groupId);
+    fetchAnalytics(groupId);
+  }, [groupId]);
 
   const totalExpenses = groups.reduce((sum, g) => sum + (Number(g.totalExpenses) || 0), 0);
   const activeGroups = groups.length;
   const recentExpenses = expenses.slice(0, 5);
   const recentActivities = activities.slice(0, 8);
+
+  const insights = useMemo(
+    () => computeAnalyticsInsights(monthly, category, CATEGORY_CONFIG),
+    [monthly, category]
+  );
+
+  const myBalance = balances.find(b => b.userId === user?.id);
+  const kpiLoading = groupsLoading || (groupId && analyticsLoading);
+
+  const chartKey = `${selectedGroup}-${insights.monthlyData.length}-${insights.categoryData.length}`;
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -82,116 +75,202 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-5 sm:p-7 max-w-6xl mx-auto">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-7">
-        <h1 className="text-2xl font-bold text-white">
-          {greeting()}, {user?.fullName?.split(' ')[0]} 👋
-        </h1>
-        <p className="text-sm text-slate-500 mt-0.5">Here's your financial overview</p>
-      </motion.div>
+    <PageContainer maxWidth="6xl">
+      <div className="page-hero">
+        <PageTitle
+          title={`${greeting()}, ${user?.fullName?.split(' ')[0]}`}
+          subtitle="Spending insights and activity across your groups"
+          emoji="👋"
+          gradient
+        />
+      </div>
 
-      {/* Stats Row */}
-      <motion.div variants={stagger} initial="initial" animate="animate"
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-        <motion.div variants={fadeUp}>
-          <StatCard label="Active Groups" value={activeGroups} icon={Users} color="brand"
-            sub={activeGroups === 0 ? 'Create your first group' : 'Groups you belong to'} />
-        </motion.div>
-        <motion.div variants={fadeUp}>
-          <StatCard label="Total Expenses" value={`₹${totalExpenses.toFixed(0)}`} icon={Receipt} color="yellow"
-            sub="Across all groups" />
-        </motion.div>
-        <motion.div variants={fadeUp}>
-          <StatCard label="Recent Expenses" value={recentExpenses.length} icon={IndianRupee} color="green"
-            sub="Latest group expenses" />
-        </motion.div>
-        <motion.div variants={fadeUp}>
-          <StatCard label="Activities" value={activities.length} icon={TrendingUp} color="red"
-            sub="Total logged actions" />
-        </motion.div>
-      </motion.div>
+      <StreakBanner
+        streakCount={summary?.stats?.streakCount}
+        longestStreak={summary?.stats?.longestStreak}
+      />
+
+      {groups.length > 1 && (
+        <GroupQuickPick
+          groups={groups}
+          selectedId={selectedGroup}
+          onSelect={setSelectedGroup}
+        />
+      )}
+
+      {/* KPI row */}
+      {kpiLoading && !insights.latestMonth ? (
+        <div className="mb-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => <SkeletonCard key={i} lines={2} />)}
+        </div>
+      ) : (
+        <StaggerGrid className="mb-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <motion.div variants={fadeUpItem}>
+            <StatCard
+              label="Active Groups"
+              count={activeGroups}
+              icon={Users}
+              color="brand"
+              sub={activeGroups === 0 ? 'Create your first group' : 'Groups you belong to'}
+            />
+          </motion.div>
+          <motion.div variants={fadeUpItem}>
+            <StatCard
+              label="Total Spend"
+              count={insights.totalSpend || totalExpenses}
+              formatCount={(n) => `₹${Math.round(n).toLocaleString('en-IN')}`}
+              icon={Receipt}
+              color="yellow"
+              sub={selectedGroupData ? `In ${selectedGroupData.groupName}` : 'Across all groups'}
+            />
+          </motion.div>
+          <motion.div variants={fadeUpItem}>
+            <StatCard
+              label="This Month"
+              count={insights.latestMonth?.amount ?? 0}
+              formatCount={(n) => `₹${Math.round(n).toLocaleString('en-IN')}`}
+              icon={BarChart2}
+              color="green"
+              sub={insights.latestMonth?.month || 'Latest period'}
+              trend={insights.monthTrend}
+            />
+          </motion.div>
+          <motion.div variants={fadeUpItem}>
+            <StatCard
+              label="Top Category"
+              value={insights.topCategoryLabel}
+              icon={PieIcon}
+              color="red"
+              sub={
+                insights.topCategory.amount
+                  ? `₹${Number(insights.topCategory.amount).toLocaleString('en-IN')}`
+                  : 'No category data'
+              }
+            />
+          </motion.div>
+        </StaggerGrid>
+      )}
+
+      {/* Charts */}
+      {groups.length > 0 && (
+        <DashboardInsights
+          monthly={monthly}
+          category={category}
+          loading={analyticsLoading && !!groupId}
+          groupId={groupId}
+          chartKey={chartKey}
+        />
+      )}
 
       {/* Main grid */}
-      <div className="grid lg:grid-cols-3 gap-5">
-        {/* Recent Expenses */}
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-white text-sm">Recent Expenses</h2>
-            <Link to="/groups" className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="glass-card p-5 lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Recent Expenses</h2>
+            <Link
+              to={groupId ? `/groups/${groupId}` : '/groups'}
+              className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300"
+            >
               View All <ArrowRight size={12} />
             </Link>
           </div>
-          {recentExpenses.length === 0 ? (
-            <EmptyState icon={Receipt} title="No expenses yet"
-              description="Add your first expense from any group"
+          {expLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton h-14 rounded-lg" />)}
+            </div>
+          ) : recentExpenses.length === 0 ? (
+            <EmptyState
+              emoji="🍕"
+              title="No expenses yet"
+              description="Start your first hostel expense — pick a group and split it with your crew."
               action={
                 <Link to="/groups" className="btn-primary text-sm">
                   <Users size={14} /> Go to Groups
                 </Link>
-              } />
+              }
+            />
           ) : (
-            <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-2">
-              {recentExpenses.map(e => <ExpenseCard key={e.id} expense={e} />)}
-            </motion.div>
+            <StaggerGrid className="space-y-2">
+              {recentExpenses.map(e => (
+                <ExpenseCard key={e.id} expense={e} compact showGroupName={groups.length > 1} />
+              ))}
+            </StaggerGrid>
           )}
         </div>
 
-        {/* Right column */}
         <div className="space-y-5">
-          {/* My Groups */}
+          <TrustScoreCard stats={summary?.stats} loading={gamificationLoading} />
+
           <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white text-sm">My Groups</h2>
-              <Link to="/groups" className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+            <h2 className="mb-3 text-sm font-semibold text-white">Recent badges</h2>
+            <BadgeGrid badges={summary?.recentBadges || []} />
+          </div>
+
+          <DashboardBalanceSummary
+            balance={myBalance}
+            groupId={groupId}
+            groupName={selectedGroupData?.groupName}
+            loading={expLoading && !!groupId}
+          />
+
+          <div className="glass-card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">My Groups</h2>
+              <Link to="/groups" className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300">
                 All <ArrowRight size={12} />
               </Link>
             </div>
             {groupsLoading ? (
               <div className="space-y-2">
-                {[1,2,3].map(i => <div key={i} className="skeleton h-12 rounded-lg" />)}
+                {[1, 2, 3].map(i => <div key={i} className="skeleton h-12 rounded-lg" />)}
               </div>
             ) : groups.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-4">No groups yet</p>
+              <p className="py-4 text-center text-xs text-slate-500">No groups yet</p>
             ) : (
               <div className="space-y-1.5">
                 {groups.slice(0, 5).map(g => (
-                  <Link key={g.id} to={`/groups/${g.id}`}
-                    className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5 transition-colors group">
+                  <Link
+                    key={g.id}
+                    to={`/groups/${g.id}`}
+                    onClick={() => setSelectedGroup(String(g.id))}
+                    className={`group flex items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-white/5
+                      ${String(g.id) === selectedGroup ? 'bg-brand-500/10 ring-1 ring-brand-500/20' : ''}`}
+                  >
                     <span className="text-lg">{g.avatar?.length <= 2 ? g.avatar : '👥'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate group-hover:text-brand-300 transition-colors">{g.groupName}</p>
-                      <p className="text-xs text-slate-500">{g.members?.length || 0} members</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white transition-colors group-hover:text-brand-300">
+                        {g.groupName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {g.members?.length || 0} members · ₹{Number(g.totalExpenses || 0).toLocaleString('en-IN')}
+                      </p>
                     </div>
-                    <ArrowRight size={12} className="text-slate-600 group-hover:text-brand-400 transition-colors" />
+                    <ArrowRight size={12} className="text-slate-600 transition-colors group-hover:text-brand-400" />
                   </Link>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Activity Feed */}
-          <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white text-sm">Recent Activity</h2>
-              <Link to="/activity" className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+          <div className="glass-card max-h-96 overflow-y-auto p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
+              <Link to="/activity" className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300">
                 All <ArrowRight size={12} />
               </Link>
             </div>
             {actLoading ? (
               <div className="space-y-3">
-                {[1,2,3].map(i => <div key={i} className="skeleton h-10 rounded-lg" />)}
+                {[1, 2, 3].map(i => <div key={i} className="skeleton h-10 rounded-lg" />)}
               </div>
             ) : recentActivities.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-4">No activity yet</p>
+              <p className="py-4 text-center text-xs text-slate-500">No activity yet</p>
             ) : (
-              <div>
-                {recentActivities.map(a => <ActivityItem key={a.id} activity={a} />)}
-              </div>
+              <ActivityTimeline activities={recentActivities} showGroup stagger={false} />
             )}
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

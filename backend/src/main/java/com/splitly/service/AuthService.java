@@ -36,15 +36,17 @@ public class AuthService {
 
     @Transactional
     public AuthResponse signup(SignupRequest request) {
-        if (userRepository.existsByEmail(request.email)) {
+        String email = request.email.toLowerCase().trim();
+
+        if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email already registered. Please login.");
         }
 
-        String avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" + request.email;
+        String avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" + email;
 
         User user = User.builder()
-                .fullName(request.fullName)
-                .email(request.email.toLowerCase().trim())
+                .fullName(request.fullName.trim())
+                .email(email)
                 .password(passwordEncoder.encode(request.password))
                 .avatar(avatar)
                 .build();
@@ -62,14 +64,13 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        String email = request.email.toLowerCase().trim();
+
         authManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.email.toLowerCase().trim(),
-                        request.password
-                )
+                new UsernamePasswordAuthenticationToken(email, request.password)
         );
 
-        User user = userRepository.findByEmail(request.email.toLowerCase().trim())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());

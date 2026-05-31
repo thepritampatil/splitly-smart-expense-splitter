@@ -24,6 +24,11 @@ function GuestRoute({ children }) {
   return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
 }
 
+function RootRoute() {
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/welcome" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -44,12 +49,14 @@ export default function App() {
       />
       <Routes>
         {/* Public */}
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/welcome" element={<LandingPage />} />
         <Route path="/login"  element={<GuestRoute><LoginPage /></GuestRoute>} />
         <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
 
         {/* Protected */}
-        <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard"            element={<Dashboard />} />
           <Route path="groups"               element={<GroupsPage />} />
           <Route path="groups/:id"           element={<GroupDetailPage />} />

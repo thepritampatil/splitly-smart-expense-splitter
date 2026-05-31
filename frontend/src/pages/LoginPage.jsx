@@ -8,18 +8,18 @@ import { FormField } from '../components/ui';
 
 function AuthLayout({ children, title, subtitle, link, linkText, linkTo }) {
   return (
-    <div className="min-h-screen bg-dark-900 flex items-center justify-center px-4">
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 w-96 h-96 bg-brand-500/5 rounded-full blur-[100px] pointer-events-none" />
+    <div className="flex min-h-screen items-center justify-center bg-dark-900 px-4">
+      <div className="pointer-events-none absolute top-20 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-brand-500/10 blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-20 right-0 h-64 w-64 rounded-full bg-purple-500/8 blur-[80px]" />
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm relative">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center font-black text-white">S</div>
-          <span className="font-bold text-xl text-white">Splitly</span>
+        className="relative w-full max-w-sm">
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-sm font-black text-white shadow-glow-sm">S</div>
+          <span className="font-display text-xl font-bold text-white">Splitly</span>
         </div>
-        <div className="glass-card p-7">
-          <h1 className="text-xl font-bold text-white mb-1">{title}</h1>
+        <div className="surface-elevated p-7">
+          <h1 className="font-display mb-1 text-xl font-bold text-white">{title}</h1>
           <p className="text-sm text-slate-500 mb-6">{subtitle}</p>
           {children}
           <p className="text-center text-xs text-slate-500 mt-5">
